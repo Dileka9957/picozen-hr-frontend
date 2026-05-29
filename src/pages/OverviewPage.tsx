@@ -1,43 +1,69 @@
+import { useState, useEffect } from "react";
 import {
   FiBriefcase,
   FiCalendar,
   FiClock,
   FiDollarSign,
   FiUsers,
+  FiLoader,
 } from "react-icons/fi";
 import { StatsCard } from "../components/common/StatsCard";
+import { getCompanyDashboard, type CompanyDashboardData } from "../services/dashboardService";
 
 export const OverviewPage = () => {
-  const stats = [
-    {
-      title: "Total Employees",
-      value: "1,234",
-      change: "+12%",
-      icon: FiUsers,
-      color: "bg-blue-500",
-    },
-    {
-      title: "Active Recruitments",
-      value: "23",
-      change: "+5%",
-      icon: FiBriefcase,
-      color: "bg-green-500",
-    },
-    {
-      title: "Pending Leave Requests",
-      value: "18",
-      change: "-3%",
-      icon: FiCalendar,
-      color: "bg-yellow-500",
-    },
-    {
-      title: "Monthly Payroll",
-      value: "$2.4M",
-      change: "+8%",
-      icon: FiDollarSign,
-      color: "bg-purple-500",
-    },
-  ];
+  const [dashboardData, setDashboardData] = useState<CompanyDashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadDashboard() {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await getCompanyDashboard();
+        setDashboardData(response.data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load dashboard data");
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadDashboard();
+  }, []);
+
+  const stats = dashboardData
+    ? [
+        {
+          title: "Total Employees",
+          value: dashboardData.totalEmployees.toString(),
+          change: "Live",
+          icon: FiUsers,
+          color: "bg-blue-500",
+        },
+        {
+          title: "Active Recruitments",
+          value: dashboardData.openPositions.toString(),
+          change: `${dashboardData.newApplicants} Applicants`,
+          icon: FiBriefcase,
+          color: "bg-green-500",
+        },
+        {
+          title: "Pending Leave Requests",
+          value: dashboardData.pendingLeaves.toString(),
+          change: "Needs Action",
+          icon: FiCalendar,
+          color: "bg-yellow-500",
+        },
+        {
+          title: "Monthly Payroll",
+          value: `$${dashboardData.monthlyPayroll.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          change: "Budget",
+          icon: FiDollarSign,
+          color: "bg-purple-500",
+        },
+      ]
+    : [];
+
 
   const recentEmployees = [
     {
@@ -79,6 +105,24 @@ export const OverviewPage = () => {
     },
     { title: "New Hire Orientation", date: "2024-10-08", type: "Training" },
   ];
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px]">
+        <FiLoader className="w-8 h-8 text-blue-600 animate-spin mb-2" />
+        <p className="text-gray-500">Loading dashboard analytics...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 bg-red-50 border border-red-200 rounded-xl text-red-600">
+        <h3 className="font-bold text-lg mb-1">Error Loading Dashboard</h3>
+        <p>{error}</p>
+      </div>
+    );
+  }
 
   return (
     <div>
