@@ -10,10 +10,13 @@ import {
   FiSettings,
   FiLogOut,
   FiX,
+  FiClock,
+  FiMapPin,
 } from "react-icons/fi";
 import { HiOutlineUserGroup } from "react-icons/hi";
 import { Header } from "../components/common/Header";
 import type { LayoutProps } from "../types/layout-types";
+import { useAuth } from "../hooks/useAuth";
 
 // Layout Component
 export const Layout = ({
@@ -22,10 +25,12 @@ export const Layout = ({
   setCurrentPage,
 }: LayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
+  const { logout } = useAuth();
   const menuItems = [
     { id: "overview", label: "Overview", icon: FiTrendingUp },
     { id: "employees", label: "Employees", icon: FiUsers },
+    { id: "attendance", label: "Attendance", icon: FiClock },
+    { id: "location", label: "Location Tracker", icon: FiMapPin },
     { id: "recruitment", label: "Recruitment", icon: FiBriefcase },
     { id: "leave", label: "Leave Management", icon: FiCalendar },
     { id: "payroll", label: "Payroll", icon: FiDollarSign },
@@ -47,7 +52,12 @@ export const Layout = ({
             <HiOutlineUserGroup className="text-3xl text-blue-500" />
             <span className="text-xl font-bold">HR Portal</span>
           </div>
-          <button onClick={() => setSidebarOpen(false)} className="lg:hidden">
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(false)}
+            className="lg:hidden"
+            title="Close sidebar"
+          >
             <FiX className="text-2xl" />
           </button>
         </div>
@@ -73,7 +83,10 @@ export const Layout = ({
         </nav>
 
         <div className="absolute bottom-0 w-64 p-4 border-t border-gray-800">
-          <button className="w-full flex items-center space-x-3 px-4 py-3 text-gray-300 hover:bg-gray-800 rounded-lg transition-colors">
+          <button
+            className="w-full flex items-center space-x-3 px-4 py-3 text-gray-300 hover:bg-gray-800 rounded-lg transition-colors"
+            onClick={logout}
+          >
             <FiLogOut className="text-xl" />
             <span>Logout</span>
           </button>
