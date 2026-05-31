@@ -20,7 +20,23 @@ const Router = ({ children }: RouterProps) => {
 };
 
 const Route = ({ path, element, currentPath }: RouteProps) => {
-  return path === currentPath ? element : null;
+  const [hasMounted, setHasMounted] = useState(false);
+  const isActive = path === currentPath;
+
+  if (isActive && !hasMounted) {
+    setHasMounted(true);
+  }
+
+  if (!hasMounted && !isActive) return null;
+
+  return (
+    <div
+      className={isActive ? "animate-page-in" : ""}
+      style={{ display: isActive ? "block" : "none" }}
+    >
+      {element}
+    </div>
+  );
 };
 
 export default function App() {

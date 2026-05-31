@@ -1,5 +1,6 @@
 export interface AuthContextValue {
   token: string | null;
+  user: AuthResponse | null;
   isAuthenticated: boolean;
   login: (payload: LoginRequest) => Promise<void>;
   register: (payload: RegisterRequest) => Promise<void>;
@@ -26,7 +27,14 @@ export interface LoginRequest {
 
 export interface AuthResponse {
   token: string;
-  // Add any other fields your backend returns (userId, role, etc.)
+  type: string;
+  userId: number;
+  email: string;
+  fullName: string;
+  role: string;
+  companyId: number | null;
+  companyName: string | null;
+  planType: string | null;
 }
 
 export interface ApiResponse<T> {

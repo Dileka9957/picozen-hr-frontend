@@ -1,9 +1,10 @@
 import { useState, useEffect, type FormEvent } from "react";
-import { FiDollarSign, FiPlus, FiLoader, FiCheck, FiX } from "react-icons/fi";
+import { FiDollarSign, FiPlus, FiLoader, FiCheck, FiX, FiFilter, FiRefreshCw, FiCalendar, FiUser, FiFileText } from "react-icons/fi";
 import {
   getMonthlyPayrolls,
   generatePayroll,
   processPayment,
+  getEmployeePayrolls,
   type PayrollRecord,
 } from "../services/payrollService";
 import { getAllEmployees, type Employee } from "../services/employeeService";
@@ -26,6 +27,14 @@ export const PayrollPage = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // View Navigation: "monthly" or "history"
+  const [activeViewTab, setActiveViewTab] = useState<"monthly" | "history">("monthly");
+
+  // History State
+  const [historyRecords, setHistoryRecords] = useState<PayrollRecord[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyEmployeeId, setHistoryEmployeeId] = useState<string>("");
 
   // Modal Dialog Form
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -57,6 +66,7 @@ export const PayrollPage = () => {
       setEmployees(res.data);
       if (res.data.length > 0) {
         setSelectedEmployeeId(res.data[0].id?.toString() || "");
+        setHistoryEmployeeId(res.data[0].id?.toString() || "");
       }
     } catch (err) {
       console.error("Failed to load employee list for dropdown selection", err);
@@ -64,8 +74,10 @@ export const PayrollPage = () => {
   };
 
   useEffect(() => {
-    loadPayrolls();
-  }, [selectedMonth, selectedYear]);
+    if (activeViewTab === "monthly") {
+      loadPayrolls();
+    }
+  }, [selectedMonth, selectedYear, activeViewTab]);
 
   useEffect(() => {
     loadEmployees();
@@ -75,10 +87,39 @@ export const PayrollPage = () => {
     if (!window.confirm("Confirm bank transfer and complete payment?")) return;
     try {
       await processPayment(id);
-      await loadPayrolls();
+      if (activeViewTab === "monthly") {
+        await loadPayrolls();
+      } else {
+        await handleFetchHistory();
+      }
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to process payment");
     }
+  };
+
+  const handleFetchHistory = async () => {
+    if (!historyEmployeeId) return;
+    try {
+      setHistoryLoading(true);
+      const res = await getEmployeePayrolls(parseInt(historyEmployeeId));
+      setHistoryRecords(res.data);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to load employee pay history");
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const handleApplyHistoryFilter = async (e: FormEvent) => {
+    e.preventDefault();
+    await handleFetchHistory();
+  };
+
+  const handleClearHistoryFilter = () => {
+    if (employees.length > 0) {
+      setHistoryEmployeeId(employees[0].id?.toString() || "");
+    }
+    setHistoryRecords([]);
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -120,166 +161,330 @@ export const PayrollPage = () => {
           <p className="text-gray-600 mt-1">Track and manage employee compensation and taxes</p>
         </div>
 
-        <div className="flex items-center space-x-3">
-          <select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            {MONTHS.map((m, idx) => (
-              <option key={idx} value={idx + 1}>{m}</option>
-            ))}
-          </select>
+        {activeViewTab === "monthly" && (
+          <div className="flex items-center space-x-3">
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+            >
+              {MONTHS.map((m, idx) => (
+                <option key={idx} value={idx + 1}>{m}</option>
+              ))}
+            </select>
 
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            {[currentYear - 2, currentYear - 1, currentYear, currentYear + 1].map((y) => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+            >
+              {[currentYear - 2, currentYear - 1, currentYear, currentYear + 1].map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
 
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium"
-          >
-            <FiPlus />
-            <span>Generate Run</span>
-          </button>
-        </div>
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium text-sm"
+            >
+              <FiPlus />
+              <span>Generate Run</span>
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center space-x-4">
-          <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
-            <FiDollarSign size={24} />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500">Total Net Salary</p>
-            <p className="text-2xl font-bold text-gray-800">${totalPayrollValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center space-x-4">
-          <div className="p-3 bg-green-50 text-green-600 rounded-lg">
-            <FiCheck size={24} />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500">Completed Payments</p>
-            <p className="text-2xl font-bold text-gray-800">{paidCount} Employees</p>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center space-x-4">
-          <div className="p-3 bg-yellow-50 text-yellow-600 rounded-lg">
-            <FiX size={24} />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500">Pending Approvals</p>
-            <p className="text-2xl font-bold text-gray-800">{pendingCount} Records</p>
-          </div>
-        </div>
+      {/* Navigation View Tabs */}
+      <div className="flex border-b border-gray-100 mb-6 bg-white rounded-t-xl">
+        <button
+          onClick={() => setActiveViewTab("monthly")}
+          className={`py-3 px-6 text-sm font-semibold border-b-2 transition-colors flex items-center space-x-2 ${
+            activeViewTab === "monthly"
+              ? "border-blue-500 text-blue-600 bg-blue-50/10"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          <FiCalendar size={16} />
+          <span>Monthly Pay Run</span>
+        </button>
+        <button
+          onClick={() => setActiveViewTab("history")}
+          className={`py-3 px-6 text-sm font-semibold border-b-2 transition-colors flex items-center space-x-2 ${
+            activeViewTab === "history"
+              ? "border-blue-500 text-blue-600 bg-blue-50/10"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          <FiUser size={16} />
+          <span>Employee Slip History</span>
+        </button>
       </div>
 
-      {loading ? (
-        <div className="flex flex-col items-center justify-center min-h-[300px]">
-          <FiLoader className="w-8 h-8 text-blue-600 animate-spin mb-2" />
-          <p className="text-gray-500 text-sm">Loading monthly pay books...</p>
-        </div>
-      ) : error ? (
-        <div className="p-6 bg-red-50 border border-red-200 rounded-xl text-red-600">
-          <h3 className="font-bold text-lg mb-1">Failed to load payrolls</h3>
-          <p>{error}</p>
-        </div>
-      ) : payrolls.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm p-12 text-center border border-gray-100">
-          <div className="text-gray-400 mb-3 text-4xl">💵</div>
-          <h3 className="text-lg font-semibold text-gray-700">No payroll runs for this month</h3>
-          <p className="text-gray-500 mt-1 text-sm max-w-md mx-auto">
-            Switch months or click "Generate Run" to build salary profiles.
-          </p>
+      {activeViewTab === "monthly" ? (
+        <div className="space-y-6">
+          {/* Stats row */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center space-x-4">
+              <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
+                <FiDollarSign size={24} />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Total Net Salary</p>
+                <p className="text-2xl font-bold text-gray-800">${totalPayrollValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center space-x-4">
+              <div className="p-3 bg-green-50 text-green-600 rounded-lg">
+                <FiCheck size={24} />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Completed Payments</p>
+                <p className="text-2xl font-bold text-gray-800">{paidCount} Employees</p>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center space-x-4">
+              <div className="p-3 bg-yellow-50 text-yellow-600 rounded-lg">
+                <FiX size={24} />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Pending Approvals</p>
+                <p className="text-2xl font-bold text-gray-800">{pendingCount} Records</p>
+              </div>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="flex flex-col items-center justify-center min-h-[300px]">
+              <FiLoader className="w-8 h-8 text-blue-600 animate-spin mb-2" />
+              <p className="text-gray-500 text-sm">Loading monthly pay books...</p>
+            </div>
+          ) : error ? (
+            <div className="p-6 bg-red-50 border border-red-200 rounded-xl text-red-600">
+              <h3 className="font-bold text-lg mb-1">Failed to load payrolls</h3>
+              <p>{error}</p>
+            </div>
+          ) : payrolls.length === 0 ? (
+            <div className="bg-white rounded-xl shadow-sm p-12 text-center border border-gray-100">
+              <div className="text-gray-400 mb-3 text-4xl">💵</div>
+              <h3 className="text-lg font-semibold text-gray-700">No payroll runs for this month</h3>
+              <p className="text-gray-500 mt-1 text-sm max-w-md mx-auto">
+                Switch months or click "Generate Run" to build salary profiles.
+              </p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-b-xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Employee
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Base Salary
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Allowances
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        EPF (8%)
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        APIT Tax
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Net Pay
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Action
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {payrolls.map((payroll) => (
+                      <tr key={payroll.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-800">
+                          {payroll.employee.user.fullName}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                          ${payroll.basicSalary.toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600">
+                          +${payroll.allowances.toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-red-500">
+                          -${payroll.epfEmployee.toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-red-500">
+                          -${payroll.apit.toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-800">
+                          ${payroll.netSalary.toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              payroll.paid
+                                ? "bg-green-50 text-green-700 border border-green-200"
+                                : "bg-yellow-50 text-yellow-700 border border-yellow-200"
+                            }`}
+                          >
+                            {payroll.paid ? "Paid" : "Pending Approval"}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {!payroll.paid && (
+                            <button
+                              onClick={() => payroll.id && handlePay(payroll.id)}
+                              className="px-3 py-1 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors shadow-sm"
+                            >
+                              Complete Payment
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Employee
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Base Salary
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Allowances
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    EPF (8%)
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    APIT Tax
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Net Pay
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Action
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {payrolls.map((payroll) => (
-                  <tr key={payroll.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-800">
-                      {payroll.employee.user.fullName}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      ${payroll.basicSalary.toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600">
-                      +${payroll.allowances.toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-red-500">
-                      -${payroll.epfEmployee.toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-red-500">
-                      -${payroll.apit.toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-800">
-                      ${payroll.netSalary.toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          payroll.paid
-                            ? "bg-green-50 text-green-700 border border-green-200"
-                            : "bg-yellow-50 text-yellow-700 border border-yellow-200"
-                        }`}
-                      >
-                        {payroll.paid ? "Paid" : "Pending Approval"}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {!payroll.paid && (
-                        <button
-                          onClick={() => payroll.id && handlePay(payroll.id)}
-                          className="px-3 py-1 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors shadow-sm"
-                        >
-                          Complete Payment
-                        </button>
-                      )}
-                    </td>
-                  </tr>
+        <div className="space-y-6">
+          {/* History Search filter bar */}
+          <form onSubmit={handleApplyHistoryFilter} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm flex flex-wrap items-end gap-4">
+            <div className="min-w-[200px] flex-1">
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Select Employee</label>
+              <select
+                value={historyEmployeeId}
+                onChange={(e) => setHistoryEmployeeId(e.target.value)}
+                required
+                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white"
+              >
+                <option value="">-- Choose Member --</option>
+                {employees.map((emp) => (
+                  <option key={emp.id} value={emp.id}>{emp.user.fullName}</option>
                 ))}
-              </tbody>
-            </table>
+              </select>
+            </div>
+
+            <div className="flex gap-2 w-full sm:w-auto">
+              <button
+                type="submit"
+                disabled={historyLoading}
+                className="flex-1 sm:flex-initial flex items-center justify-center space-x-1.5 bg-gray-800 text-white hover:bg-gray-900 px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm"
+              >
+                {historyLoading ? <FiLoader className="animate-spin" /> : <FiFilter />}
+                <span>Fetch Pay Slips</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleClearHistoryFilter}
+                className="flex items-center justify-center space-x-1 border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-sm font-medium transition"
+              >
+                <FiRefreshCw size={14} />
+                <span>Clear</span>
+              </button>
+            </div>
+          </form>
+
+          {/* History Search Roster */}
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            {historyLoading ? (
+              <div className="flex flex-col items-center justify-center min-h-[250px]">
+                <FiLoader className="w-8 h-8 text-blue-600 animate-spin mb-2" />
+                <p className="text-gray-500 text-sm">Searching payroll slips...</p>
+              </div>
+            ) : historyRecords.length === 0 ? (
+              <div className="p-12 text-center text-gray-400 text-sm flex flex-col items-center justify-center min-h-[220px]">
+                <FiFileText size={24} className="mb-2 text-gray-300" />
+                No paybook history loaded. Select an employee and click "Fetch Pay Slips" to display history records.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Period (Month/Year)
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Base Salary
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Allowances
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        EPF (8%)
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        APIT Tax
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Net Pay
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Action
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {historyRecords.map((record) => (
+                      <tr key={record.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-800 font-mono">
+                          {MONTHS[record.month - 1]} / {record.year}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">
+                          ${record.basicSalary.toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-mono">
+                          +${record.allowances.toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-red-500 font-mono">
+                          -${record.epfEmployee.toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-red-500 font-mono">
+                          -${record.apit.toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-800 font-mono">
+                          ${record.netSalary.toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              record.paid
+                                ? "bg-green-50 text-green-700 border border-green-200"
+                                : "bg-yellow-50 text-yellow-700 border border-yellow-200"
+                            }`}
+                          >
+                            {record.paid ? "Paid" : "Pending Approval"}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {!record.paid && (
+                            <button
+                              onClick={() => record.id && handlePay(record.id)}
+                              className="px-3 py-1 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors shadow-sm"
+                            >
+                              Complete Payment
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -313,7 +518,7 @@ export const PayrollPage = () => {
                   value={selectedEmployeeId}
                   onChange={(e) => setSelectedEmployeeId(e.target.value)}
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-sm bg-white"
                 >
                   {employees.map((emp) => (
                     <option key={emp.id} value={emp.id}>
@@ -332,7 +537,7 @@ export const PayrollPage = () => {
                   value={allowances}
                   onChange={(e) => setAllowances(e.target.value)}
                   placeholder="0"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-sm"
                 />
               </div>
 
@@ -345,7 +550,7 @@ export const PayrollPage = () => {
                   value={overtimePay}
                   onChange={(e) => setOvertimePay(e.target.value)}
                   placeholder="0"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-sm"
                 />
               </div>
 
@@ -358,7 +563,7 @@ export const PayrollPage = () => {
                   value={otherDeductions}
                   onChange={(e) => setOtherDeductions(e.target.value)}
                   placeholder="0"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-sm"
                 />
               </div>
 
@@ -366,14 +571,14 @@ export const PayrollPage = () => {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors text-sm"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitLoading}
-                  className="flex items-center justify-center px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-medium rounded-lg transition-colors shadow-sm"
+                  className="flex items-center justify-center px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-medium rounded-lg transition-colors shadow-sm text-sm"
                 >
                   {submitLoading ? (
                     <>

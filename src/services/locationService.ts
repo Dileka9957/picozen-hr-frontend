@@ -42,6 +42,30 @@ export async function trackLocation(
   }
 }
 
+export async function getLocationsByEmployee(empId: number): Promise<ApiResponse<LocationRecord[]>> {
+  try {
+    const { data } = await api.get<ApiResponse<LocationRecord[]>>(`/api/locations/employee/${empId}`);
+    return data;
+  } catch (err) {
+    throw extractError(err);
+  }
+}
+
+export async function getLocationsByEmployeeAndRange(
+  empId: number,
+  startTime: string,
+  endTime: string,
+): Promise<ApiResponse<LocationRecord[]>> {
+  try {
+    const { data } = await api.get<ApiResponse<LocationRecord[]>>(
+      `/api/locations/employee/${empId}/range?startTime=${encodeURIComponent(startTime)}&endTime=${encodeURIComponent(endTime)}`,
+    );
+    return data;
+  } catch (err) {
+    throw extractError(err);
+  }
+}
+
 export async function deleteLocation(id: number): Promise<ApiResponse<void>> {
   try {
     const { data } = await api.delete<ApiResponse<void>>(`/api/locations/${id}`);
@@ -50,3 +74,4 @@ export async function deleteLocation(id: number): Promise<ApiResponse<void>> {
     throw extractError(err);
   }
 }
+

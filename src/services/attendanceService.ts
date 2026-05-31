@@ -44,6 +44,30 @@ export async function checkOut(attendanceId: number): Promise<ApiResponse<Attend
   }
 }
 
+export async function getEmployeeAttendance(empId: number): Promise<ApiResponse<AttendanceRecord[]>> {
+  try {
+    const { data } = await api.get<ApiResponse<AttendanceRecord[]>>(`/api/attendance/employee/${empId}`);
+    return data;
+  } catch (err) {
+    throw extractError(err);
+  }
+}
+
+export async function getEmployeeAttendanceRange(
+  empId: number,
+  startDate: string,
+  endDate: string,
+): Promise<ApiResponse<AttendanceRecord[]>> {
+  try {
+    const { data } = await api.get<ApiResponse<AttendanceRecord[]>>(
+      `/api/attendance/employee/${empId}/range?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`,
+    );
+    return data;
+  } catch (err) {
+    throw extractError(err);
+  }
+}
+
 export async function markAttendance(
   employeeId: number,
   date: string,
@@ -66,3 +90,4 @@ export async function markAttendance(
     throw extractError(err);
   }
 }
+

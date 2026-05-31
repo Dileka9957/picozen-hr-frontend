@@ -61,3 +61,13 @@ export async function processPayment(id: number): Promise<ApiResponse<PayrollRec
     throw extractError(err);
   }
 }
+
+export async function getEmployeePayrolls(empId: number): Promise<ApiResponse<PayrollRecord[]>> {
+  try {
+    const { data } = await api.get<ApiResponse<PayrollRecord[]>>(`/api/payroll/employee/${empId}`);
+    return data;
+  } catch (err) {
+    throw extractError(err);
+  }
+}
+

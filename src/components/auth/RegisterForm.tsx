@@ -55,6 +55,8 @@ export function RegisterForm({ onSwitch }: { onSwitch: () => void }) {
     setLoading(true);
     try {
       await register(form);
+      alert("Registration successful! Please log in with your new credentials.");
+      onSwitch();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
     } finally {

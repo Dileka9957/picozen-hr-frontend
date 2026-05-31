@@ -23,6 +23,17 @@ export async function getPendingLeaves(): Promise<ApiResponse<LeaveRequest[]>> {
   }
 }
 
+export async function applyLeave(
+  leave: Partial<LeaveRequest>,
+): Promise<ApiResponse<LeaveRequest>> {
+  try {
+    const { data } = await api.post<ApiResponse<LeaveRequest>>("/api/leaves", leave);
+    return data;
+  } catch (err) {
+    throw extractError(err);
+  }
+}
+
 export async function approveLeave(
   id: number,
   remarks: string,
@@ -50,3 +61,4 @@ export async function rejectLeave(
     throw extractError(err);
   }
 }
+

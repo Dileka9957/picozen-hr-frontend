@@ -1,7 +1,19 @@
 import { FiBell, FiMenu, FiSearch } from "react-icons/fi";
 import type { HeaderProps } from "../../types/components-types";
+import { useAuth } from "../../hooks/useAuth";
 
 export const Header = ({ setSidebarOpen }: HeaderProps) => {
+  const { user } = useAuth();
+  const displayName = user?.fullName || "HR Manager";
+  const displayEmail = user?.email || "hr@picozen.tech";
+  const initials = displayName
+    .split(" ")
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "HR";
+
   return (
     <header className="bg-white shadow-sm sticky top-0 z-40">
       <div className="flex items-center justify-between px-6 py-4">
@@ -25,12 +37,12 @@ export const Header = ({ setSidebarOpen }: HeaderProps) => {
             <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
           </button>
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold">
-              HR
+            <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold" title={displayName}>
+              {initials}
             </div>
             <div>
-              <p className="text-sm font-semibold text-gray-800">HR Manager</p>
-              <p className="text-xs text-gray-500">hr@picozen.tech</p>
+              <p className="text-sm font-semibold text-gray-800">{displayName}</p>
+              <p className="text-xs text-gray-500">{displayEmail}</p>
             </div>
           </div>
         </div>

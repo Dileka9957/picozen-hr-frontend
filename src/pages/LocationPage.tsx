@@ -1,9 +1,11 @@
 import { useState, useEffect, type FormEvent } from "react";
-import { FiMapPin, FiLoader, FiPlus, FiTrash2, FiX, FiCompass } from "react-icons/fi";
+import { FiMapPin, FiLoader, FiPlus, FiTrash2, FiX, FiCompass, FiFilter, FiRefreshCw } from "react-icons/fi";
 import {
   getAllLocations,
   trackLocation,
   deleteLocation,
+  getLocationsByEmployee,
+  getLocationsByEmployeeAndRange,
   type LocationRecord,
 } from "../services/locationService";
 import { getAllEmployees, type Employee } from "../services/employeeService";
@@ -19,12 +21,18 @@ export const LocationPage = () => {
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Form State
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
+  // Simulation Form State
+  const [simSelectedEmployeeId, setSimSelectedEmployeeId] = useState("");
   const [latitude, setLatitude] = useState("6.9271"); // Colombo default
   const [longitude, setLongitude] = useState("79.8612");
   const [address, setAddress] = useState("Picozen Headquarters, Colombo");
   const [activityType, setActivityType] = useState("FIELD_VISIT");
+
+  // Filtering State
+  const [filterEmployeeId, setFilterEmployeeId] = useState<string>("ALL");
+  const [filterStartTime, setFilterStartTime] = useState("");
+  const [filterEndTime, setFilterEndTime] = useState("");
+  const [filterLoading, setFilterLoading] = useState(false);
 
   const loadData = async () => {
     try {
@@ -44,7 +52,7 @@ export const LocationPage = () => {
       const res = await getAllEmployees();
       setEmployees(res.data);
       if (res.data.length > 0) {
-        setSelectedEmployeeId(res.data[0].id?.toString() || "");
+        setSimSelectedEmployeeId(res.data[0].id?.toString() || "");
       }
     } catch (err) {
       console.error("Failed to load employees list", err);
@@ -55,6 +63,42 @@ export const LocationPage = () => {
     loadData();
     loadEmployees();
   }, []);
+
+  const handleApplyFilter = async (e: FormEvent) => {
+    e.preventDefault();
+    if (filterEmployeeId === "ALL") {
+      await loadData();
+      return;
+    }
+    
+    try {
+      setFilterLoading(true);
+      setError(null);
+      const empIdNum = parseInt(filterEmployeeId);
+      
+      if (filterStartTime && filterEndTime) {
+        // Convert local input datetimes to ISO strings for backend
+        const startISO = new Date(filterStartTime).toISOString().split('.')[0]; // YYYY-MM-DDTHH:mm:ss
+        const endISO = new Date(filterEndTime).toISOString().split('.')[0];
+        const res = await getLocationsByEmployeeAndRange(empIdNum, startISO, endISO);
+        setLocations(res.data);
+      } else {
+        const res = await getLocationsByEmployee(empIdNum);
+        setLocations(res.data);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to filter location records");
+    } finally {
+      setFilterLoading(false);
+    }
+  };
+
+  const handleClearFilter = async () => {
+    setFilterEmployeeId("ALL");
+    setFilterStartTime("");
+    setFilterEndTime("");
+    await loadData();
+  };
 
   const handleDelete = async (id: number) => {
     if (!window.confirm("Remove this location log?")) return;
@@ -73,7 +117,7 @@ export const LocationPage = () => {
 
     try {
       await trackLocation(
-        parseInt(selectedEmployeeId),
+        parseInt(simSelectedEmployeeId),
         parseFloat(latitude),
         parseFloat(longitude),
         address,
@@ -99,26 +143,83 @@ export const LocationPage = () => {
 
         <button
           onClick={() => setIsModalOpen(true)}
-          className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium"
+          className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium text-sm"
         >
           <FiCompass />
           <span>Simulate GPS Ping</span>
         </button>
       </div>
 
+      {/* Advanced Filtering Form */}
+      <form onSubmit={handleApplyFilter} className="bg-white rounded-xl border border-gray-100 p-4 mb-6 shadow-sm flex flex-wrap items-end gap-4">
+        <div className="min-w-[150px] flex-1">
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Filter Agent</label>
+          <select
+            value={filterEmployeeId}
+            onChange={(e) => setFilterEmployeeId(e.target.value)}
+            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white"
+          >
+            <option value="ALL">Show All Agents</option>
+            {employees.map((emp) => (
+              <option key={emp.id} value={emp.id}>{emp.user.fullName}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="min-w-[180px] flex-1">
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Start Date & Time</label>
+          <input
+            type="datetime-local"
+            value={filterStartTime}
+            onChange={(e) => setFilterStartTime(e.target.value)}
+            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
+          />
+        </div>
+
+        <div className="min-w-[180px] flex-1">
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">End Date & Time</label>
+          <input
+            type="datetime-local"
+            value={filterEndTime}
+            onChange={(e) => setFilterEndTime(e.target.value)}
+            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
+          />
+        </div>
+
+        <div className="flex gap-2 w-full sm:w-auto">
+          <button
+            type="submit"
+            disabled={filterLoading}
+            className="flex-1 sm:flex-initial flex items-center justify-center space-x-1.5 bg-gray-800 text-white hover:bg-gray-900 px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm"
+          >
+            {filterLoading ? <FiLoader className="animate-spin" /> : <FiFilter />}
+            <span>Filter</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleClearFilter}
+            className="flex items-center justify-center space-x-1 border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-sm font-medium transition"
+          >
+            <FiRefreshCw size={14} />
+            <span>Reset</span>
+          </button>
+        </div>
+      </form>
+
       {/* Visual Simulation Roster */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
         {/* Mock Map / GPS Display */}
         <div className="lg:col-span-2 bg-slate-950 rounded-xl overflow-hidden shadow-sm relative min-h-[400px] flex items-center justify-center border border-slate-800">
           <div className="absolute inset-0 opacity-20 pointer-events-none bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:16px_16px]"></div>
           
           <div className="text-center z-10 px-6">
             <FiMapPin className="w-16 h-16 text-blue-500 animate-bounce mx-auto mb-4" />
-            <h3 className="text-white text-xl font-bold">Field Dispatch Map (Simulated)</h3>
+            <h3 className="text-white text-xl font-bold">Field Dispatch Map</h3>
             <p className="text-slate-400 text-sm mt-1 max-w-md mx-auto">
-              Real-time tracker actively listening to GPS coordinate updates. Select simulated pings to draw route maps.
+              Real-time tracker actively listening to GPS coordinate updates. Telemetry updates and routes are generated dynamically below.
             </p>
-            <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <div className="mt-6 flex flex-wrap justify-center gap-3 max-h-[150px] overflow-y-auto">
               {locations.slice(0, 5).map((loc, idx) => (
                 <span
                   key={idx}
@@ -132,22 +233,22 @@ export const LocationPage = () => {
         </div>
 
         {/* Dynamic Coordinates Roster */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 overflow-hidden">
-          <h2 className="text-xl font-bold text-gray-800 mb-4 border-b border-gray-50 pb-2">Active Telemetry Logs</h2>
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 overflow-hidden flex flex-col max-h-[460px]">
+          <h2 className="text-xl font-bold text-gray-800 mb-4 border-b border-gray-50 pb-2">Active Telemetry Logs ({locations.length})</h2>
 
-          {loading ? (
-            <div className="flex flex-col items-center justify-center min-h-[250px]">
+          {loading || filterLoading ? (
+            <div className="flex flex-col items-center justify-center flex-1">
               <FiLoader className="w-8 h-8 text-blue-600 animate-spin mb-2" />
               <p className="text-gray-500 text-sm">Synchronizing logs...</p>
             </div>
           ) : error ? (
-            <div className="text-red-500 text-sm p-4">{error}</div>
+            <div className="text-red-500 text-sm p-4 text-center">{error}</div>
           ) : locations.length === 0 ? (
-            <div className="text-gray-400 text-center py-12 text-sm">
-              No field tracker logs found. Click "Simulate GPS Ping" to seed data!
+            <div className="text-gray-400 text-center py-12 text-sm flex-1 flex items-center justify-center">
+              No matching field logs found for current filter.
             </div>
           ) : (
-            <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1">
+            <div className="space-y-4 overflow-y-auto flex-1 pr-1">
               {locations.map((loc) => (
                 <div
                   key={loc.id}
@@ -171,7 +272,7 @@ export const LocationPage = () => {
                   <p className="text-xs text-gray-500 font-medium mb-1.5">{loc.address}</p>
                   <div className="flex items-center justify-between text-[10px] font-mono text-gray-400">
                     <span>Lat: {loc.latitude} | Lng: {loc.longitude}</span>
-                    <span>{loc.timestamp ? new Date(loc.timestamp).toLocaleTimeString() : ""}</span>
+                    <span>{loc.timestamp ? new Date(loc.timestamp).toLocaleString() : ""}</span>
                   </div>
                 </div>
               ))}
@@ -206,10 +307,10 @@ export const LocationPage = () => {
                   Select Field Agent <span className="text-red-500">*</span>
                 </label>
                 <select
-                  value={selectedEmployeeId}
-                  onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                  value={simSelectedEmployeeId}
+                  onChange={(e) => setSimSelectedEmployeeId(e.target.value)}
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
                 >
                   {employees.map((emp) => (
                     <option key={emp.id} value={emp.id}>
@@ -229,7 +330,7 @@ export const LocationPage = () => {
                     value={latitude}
                     onChange={(e) => setLatitude(e.target.value)}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
                   />
                 </div>
                 <div>
@@ -241,7 +342,7 @@ export const LocationPage = () => {
                     value={longitude}
                     onChange={(e) => setLongitude(e.target.value)}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
                   />
                 </div>
               </div>
@@ -255,7 +356,7 @@ export const LocationPage = () => {
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
               </div>
 
@@ -267,7 +368,7 @@ export const LocationPage = () => {
                   value={activityType}
                   onChange={(e) => setActivityType(e.target.value)}
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
                 >
                   <option value="FIELD_VISIT">FIELD_VISIT</option>
                   <option value="CHECK_IN">CHECK_IN</option>
@@ -279,14 +380,14 @@ export const LocationPage = () => {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-sm"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitLoading}
-                  className="flex items-center justify-center px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-medium rounded-lg transition-colors"
+                  className="flex items-center justify-center px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-medium rounded-lg transition-colors text-sm"
                 >
                   {submitLoading ? (
                     <>

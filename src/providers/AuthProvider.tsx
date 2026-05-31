@@ -4,35 +4,46 @@ import type {
   AuthContextValue,
   LoginRequest,
   RegisterRequest,
+  AuthResponse,
 } from "../types/auth-types";
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() =>
-    localStorage.getItem("token"),
+    sessionStorage.getItem("token"),
   );
+  const [user, setUser] = useState<AuthResponse | null>(() => {
+    const saved = sessionStorage.getItem("user");
+    try {
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
 
   const login = useCallback(async (payload: LoginRequest) => {
     const res = await authService.login(payload);
-    localStorage.setItem("token", res.data.token);
+    sessionStorage.setItem("token", res.data.token);
+    sessionStorage.setItem("user", JSON.stringify(res.data));
     setToken(res.data.token);
+    setUser(res.data);
   }, []);
 
   const register = useCallback(async (payload: RegisterRequest) => {
-    const res = await authService.register(payload);
-    localStorage.setItem("token", res.data.token);
-    setToken(res.data.token);
+    await authService.register(payload);
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem("token");
+    sessionStorage.removeItem("token");
+    sessionStorage.removeItem("user");
     setToken(null);
+    setUser(null);
   }, []);
 
   return (
     <AuthContext.Provider
-      value={{ token, isAuthenticated: !!token, login, register, logout }}
+      value={{ token, user, isAuthenticated: !!token, login, register, logout }}
     >
       {children}
     </AuthContext.Provider>
